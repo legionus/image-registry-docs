@@ -1,0 +1,88 @@
+strict digraph A {
+	compound=true;
+	graph[ordering="out", style="filled", nodesep=0.3, ranksep=0.5];
+	node [shape="rectangle", style="rounded,filled", fillcolor="#ffffff", fontsize=24];
+
+	top [style="invis"];
+	client [label="client", width=2];
+
+	subgraph cluster_registry {
+		label="Supermiddleware";
+		labeljust="l"; labelloc="t";
+		fontsize="24";
+		fontcolor="#ffffff";
+		fillcolor="#819ca8";
+
+		registryApp [label="App", width=2, fontcolor="#ffffff", fontcolor="#000000", fillcolor="#819ca8"];
+
+		subgraph cluster_dockerApp {
+			label="Docker App";
+			labeljust="l"; labelloc="t";
+			fontsize="24";
+			fontcolor="#000000";
+			fillcolor="#d0d0d0";
+
+			dockerApp     [label="Docker App",              width=2];
+			dockerHandler [label="Client request handlers", width=2];
+
+			{
+				rank="same";
+				dockerApp;
+				dockerHandler;
+			}
+
+			registryRegistry      [label="registry",              width=2, fillcolor="#819ca8"];
+			registryRepository    [label="repository",            width=2, fillcolor="#819ca8"];
+			registryStorage       [label="storage",               width=2, fillcolor="#819ca8"];
+			blobDescriptorService [label="blobDescriptorService", width=2, fillcolor="#819ca8"];
+			registryAuth          [label="auth",                  width=2, fillcolor="#819ca8"];
+
+			authController          [label="Access Controller",      width=2];
+			blobAccessController    [label="Blob Access Controller", width=2];
+			blobDescriptorCache     [label="Blob Descriptor Cache",  width=2];
+
+			dockerStorage    [label="Storage driver",  width=2];
+			dockerRegistry   [label="Registry",        width=2];
+			dockerRepository [label="Repository",      width=2];
+			linkedBlobStore  [label="linkedBlobStore", width=2];
+
+			//authController->dockerRegistry->dockerStorage->blobDescriptorCache [style="invis", constraint="false"];
+
+			{
+				rank="same";
+				authController;
+				dockerStorage;
+				dockerRegistry;
+				blobDescriptorCache;
+			}
+
+			dockerApp->dockerHandler;
+			dockerApp->authController->registryAuth;
+			dockerApp->blobDescriptorCache;
+
+			dockerApp->registryRegistry->dockerRegistry;
+			dockerHandler->registryRepository->dockerRepository;
+			dockerApp->registryStorage->dockerStorage;
+
+			dockerRegistry->blobDescriptorService->blobAccessController;
+			dockerRegistry->linkedBlobStore;
+			dockerRegistry->dockerRepository [color="#8d8d8d"];
+
+			{
+				rank="same";
+				blobAccessController;
+				linkedBlobStore;
+			}
+		}
+		registryApp->dockerApp;
+	}
+
+	{
+		rank="same";
+		top;
+		client;
+	}
+
+	top->registryApp [style="invis"];
+	client->dockerHandler [dir="both"];
+}

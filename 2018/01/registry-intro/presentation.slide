@@ -1,0 +1,194 @@
+Openshift registry
+code walkthrough
+15:30 19 Jan 2018
+Tags: registry, sourcecode, overview
+
+Alexey Gladkov
+
+https://github.com/openshift/image-registry
+
+: To start our conversation about the openshift registry implementation, we need to talk about the background of this.
+: And the first question is:
+
+* What is Image?
+
+An image is the template for a container.
+
+- *layer*: a tar archive bundling partial content from a filesystem
+- *manifest*: the JSON representation of an image
+
+* Manifest example
+
+.code snippets/schema-v2.json
+
+: This is how the manifest V2 looks like.
+
+* Docker distribution overview
+
+Rule: A blob is any kind of content that is stored by a registry under a content-addressable identifier (a "digest").
+
+- as simple as possible
+- stateless
+- highly scalable
+
+: No database (almost)
+: No deletion of blobs (almost)
+
+* Openshift registry features
+
+- metadata is stored in the database (openshift master API).
+- user accounts and credentials from the openshift cluster.
+- pullthrough
+- mirroring
+- audit logs
+- prometheus metrics
+
+: But on the other hand, our features also bring problems:
+
+* Features disclaimer
+
+- metadata is stored in the database ⟶ limits horizontal scalability
+- user accounts and credentials ⟶ impossible to login in the registry with user/pass
+- pullthrough ⟶ the possible performance and security issues
+- mirroring ⟶ the possible exhaustion of the storage
+
+* We know better how to design
+
+.image images/complex-system.jpg _ 700
+
+* How to change the behavior of the docker/distribution
+
+- Auth controller ‒ wraps every request
+- Registry middleware ‒ wraps reqistry interface in general
+- Repository middleware ‒ wraps the repository-related requests
+- Storage middleware ‒ wraps storage driver
+- BlobDescriptorService ‒ implements the verification of access rights to blobs
+
+This is all the places from which we can influence behavior.
+
+Not too much ?
+
+: Each of them individually extends only a small part, but all together they provide many opportunities.
+
+* How docker/distribution works
+
+.image images/step1-docker-distribution.png
+
+* The docker/distribution middlewares
+
+.image images/step2-docker-distribution-middleware.png _ 900
+
+* Supermiddleware
+
+- register as all the middlewares
+- connects middlewares layers together
+- controls the middleware configuration
+
+* Supermiddleware with docker/distribution
+
+.image images/step3-registry-middleware.png _ 900
+
+* How we search for blob (blobDescriptorService)
+
+- Search among the local links in the repository
+- Search globally among all blobs and try to find the blob in the database.
+- Search on remote servers if allowed
+
+* BlobDescriptorService implementation
+
+.code snippets/blobDescriptorService-Stat.go
+
+* BlobDescriptorService.Stat call
+
+.html snippets/blobDescriptorService-Stat.html
+
+* Push Image
+
+- *GET* `/v2/`
+- *GET* `/openshift/token`
+- *HEAD* `/v2/<REPO>/blobs/<DIGEST>`
+- *POST* `/v2/<REPO>/blobs/uploads/`
+- *PATCH* `/v2/<REPO>/blobs/uploads/<UUID>`
+- *PUT* `/v2/<REPO>/blobs/uploads/<UUID>`
+- *PUT* `/v2/<REPO>/manifests/<TAG>`
+
+: [1] API version check. This is used to determine if the server supports the v2 API. Now everyone can do it.
+: [2] Second endpoint is used to get session token.
+: [3] Check if there is a blob.
+: [4] Start downloading a new blob.
+: [5] Chunked Upload. Formally, there can be many such requests, but because of the features of some storage drivers (such as S3), this is practically impossible.
+: [6] Completion of the download of the blog.
+: [7] Once all of the layers for an image are uploaded, the client can upload the image manifest.
+: All requests are independent and the server almost can not understand the relationship between them.
+
+* Pull Image
+
+- *GET* `/v2/`
+- *GET* `/openshift/token`
+- *GET* `/v2/<REPO>/manifests/<TAG>`
+- *GET* `/v2/<REPO>/blobs/<DIGEST>`
+
+: Let's talk about a slightly simpler query: getting an image.
+: [1] API Version Check.
+: [2] Get session token.
+: [3] Get image manifest.
+: [4] Get required blob.
+
+* ManifestService
+
+.code snippets/manifestservice.go
+
+* How the request for a manifest goes through the code
+
+.html snippets/getmanifest.html
+
+: Here is an incomplete stack of function calls to get the manifest.
+: Some developers find it difficult to understand the code since the entry point is in a completely different place.
+: Processing begins in the docker/distribution code and only sometimes processing is passed to our code.
+
+* Pullthrough & mirroring
+
+- Transparent proxy requests to third-party registry servers
+- Cache external blobs localy
+
+: This mechanism starts if the blob is not found locally.
+
+* BlobStore
+
+.code snippets/blobstore.go
+
+* Pullthrough: Stat
+
+.code snippets/pullthroughBlobStore-Stat.go
+
+* Pullthrough: ServeBlob
+
+.code snippets/pullthroughBlobStore-ServeBlob.go
+
+* Get blob
+
+.html snippets/getblob.html
+
+* Tag service
+
+TagService is just an interface to the database
+
+* Source code structure
+
+The division into modules is not over yet, but here is what it is now:
+
+.html snippets/sourcecode.html
+
+: [1] Implementation-specific definitions
+: [2] Package audit log the beginning and end of each API request
+: [3] Provides functions for token authentication specification
+: [4] Provides facilities to speed up access to the storage backend. Unfortunately this is not enough to cache everything because some parts of the docker/distribution are not using our code.
+: [5] Provides functions to make requests to openshift master API.
+: [6] Module for processing an implementation-specific configuration
+: [7] Provides functions for limiting incoming requests
+: [8] Provides functions to collect runtime statistics
+: [9] Provides functions for hard pruning
+: [10] Yes, this is s supermiddleware
+: [11] Middleware generator
+: [12] Unsplited modules: auth, manifestService, tagService, pullthrough-related code, blobDescriptorService
+

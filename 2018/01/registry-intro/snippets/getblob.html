@@ -1,0 +1,25 @@
+<style type="text/css">
+.stack {
+	font-size: 20px;
+	font-family: mono;
+}
+.stack .important {
+	color: red;
+}
+.stack .module {
+	color: gray;
+}
+.stack li {
+	line-height: 15px;
+}
+</style>
+<ol class="stack">
+<li><b>&lt;SKIP&gt;</b></li>
+<li><span class="module">openshift/image-registry/../server</span>.(*repository).Blobs</li>
+<li><b><span class="module">openshift/image-registry/../server</span>.(*pullthroughBlobStore).Stat</b></li>
+<li><span class="module">openshift/image-registry/../server</span>.(*remoteBlobGetterService).Stat</li>
+<li><b><span class="module">openshift/image-registry/../server</span>.(*pullthroughBlobStore).ServeBlob</b></li>
+<li><span class="module">openshift/image-registry/../server</span><b class="important">.(*pullthroughBlobStore).storeLocalInBackground</b></li>
+<li><span class="module">openshift/image-registry/../server</span>.(*pullthroughBlobStore).copyContent</li>
+<li><span class="module">openshift/image-registry/../server</span>.(*pullthroughBlobStore).serveRemoteContent</li>
+</ol>

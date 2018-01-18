@@ -1,0 +1,51 @@
+strict digraph A {
+	compound=true;
+	graph[ordering="out", style="filled", nodesep=0.3, ranksep=0.5];
+	node [shape="rectangle", style="rounded,filled", fillcolor="#ffffff", fontsize=14];
+
+	top [style="invis"];
+	client [label="client", width=2];
+
+		subgraph cluster_dockerApp {
+			label="Docker App";
+			labeljust="l"; labelloc="t";
+			fontsize="14";
+			fillcolor="#d0d0d0";
+
+			dockerApp     [label="Docker App",              width=2];
+			dockerHandler [label="Client request handlers", width=2];
+
+			{
+				rank="same";
+				dockerApp;
+				dockerHandler;
+			}
+
+			authController       [label="Access Controller",      width=2];
+			blobAccessController [label="Blob Access Controller", width=2];
+			blobDescriptorCache  [label="Blob Descriptor Cache",  width=2];
+
+			dockerStorage    [label="Storage driver",  width=2];
+			dockerRegistry   [label="Registry",        width=2];
+			dockerRepository [label="Repository",      width=2];
+			linkedBlobStore  [label="linkedBlobStore", width=2];
+
+			authController->dockerRegistry->dockerStorage [style="invis", constraint="false"];
+
+			dockerApp->{ dockerHandler; dockerStorage; dockerRegistry; authController; blobDescriptorCache; }
+
+			dockerHandler->dockerRepository;
+
+			dockerRegistry->{ blobAccessController; linkedBlobStore; };
+			dockerRegistry->dockerRepository [color="#8d8d8d"];
+		}
+
+	{
+		rank="same";
+		top;
+		client;
+	}
+
+	top->dockerApp [style="invis"];
+	client->dockerHandler [dir="both"];
+}
