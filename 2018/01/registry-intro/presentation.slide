@@ -10,7 +10,7 @@ https://github.com/openshift/image-registry
 : To start our conversation about the openshift registry implementation, we need to talk about the background of this.
 : And the first question is:
 
-* What is Image?
+* What is an Image?
 
 An image is the template for a container.
 
@@ -21,7 +21,7 @@ An image is the template for a container.
 
 .code snippets/schema-v2.json
 
-: This is how the manifest V2 looks like.
+: This is what the manifest V2 looks like.
 
 * Docker distribution overview
 
@@ -37,7 +37,7 @@ Rule: A blob is any kind of content that is stored by a registry under a content
 * Openshift registry features
 
 - metadata is stored in the database (openshift master API).
-- user accounts and credentials from the openshift cluster.
+- user accounts and credentials come from the openshift cluster.
 - pullthrough
 - mirroring
 - audit logs
@@ -59,12 +59,12 @@ Rule: A blob is any kind of content that is stored by a registry under a content
 * How to change the behavior of the docker/distribution
 
 - Auth controller ‒ wraps every request
-- Registry middleware ‒ wraps reqistry interface in general
-- Repository middleware ‒ wraps the repository-related requests
+- Registry middleware ‒ wraps reqistry interface in general  - what is the "registry interface"?
+- Repository middleware ‒ wraps the repository-related requests - what is the "repository"?
 - Storage middleware ‒ wraps storage driver
 - BlobDescriptorService ‒ implements the verification of access rights to blobs
 
-This is all the places from which we can influence behavior.
+This is all the places where we can influence behavior.
 
 Not too much ?
 
@@ -80,19 +80,19 @@ Not too much ?
 
 * Supermiddleware
 
-- register as all the middlewares
-- connects middlewares layers together
+- register as all the middlewares - what is a middleware?
+- connects middleware layers together
 - controls the middleware configuration
 
 * Supermiddleware with docker/distribution
 
 .image images/step3-registry-middleware.png _ 900
 
-* How we search for blob (blobDescriptorService)
+* How we search for a blob (blobDescriptorService)
 
 - Search among the local links in the repository
 - Search globally among all blobs and try to find the blob in the database.
-- Search on remote servers if allowed
+- Search on remote servers if allowed - pullthrough? other cases where this is allowed?
 
 * BlobDescriptorService implementation
 
@@ -112,14 +112,14 @@ Not too much ?
 - *PUT* `/v2/<REPO>/blobs/uploads/<UUID>`
 - *PUT* `/v2/<REPO>/manifests/<TAG>`
 
-: [1] API version check. This is used to determine if the server supports the v2 API. Now everyone can do it.
-: [2] Second endpoint is used to get session token.
+: [1] API version check. This is used to determine if the server supports the v2 API. Now everyone can do it(meaning there's no auth check?).
+: [2] Second endpoint is used to get a session token.
 : [3] Check if there is a blob.
-: [4] Start downloading a new blob.
+: [4] Start uploading a new blob.
 : [5] Chunked Upload. Formally, there can be many such requests, but because of the features of some storage drivers (such as S3), this is practically impossible.
-: [6] Completion of the download of the blog.
+: [6] Completion of the download of the blob.
 : [7] Once all of the layers for an image are uploaded, the client can upload the image manifest.
-: All requests are independent and the server almost can not understand the relationship between them.
+: All requests are independent and the server mostly does not understand the relationship between them.
 
 * Pull Image
 
@@ -131,8 +131,8 @@ Not too much ?
 : Let's talk about a slightly simpler query: getting an image.
 : [1] API Version Check.
 : [2] Get session token.
-: [3] Get image manifest.
-: [4] Get required blob.
+: [3] Get image manifest.(this will include the list of blobs that need to be retrieved)
+: [4] Get required blob(repeated for each layer in the manifest).
 
 * ManifestService
 
@@ -149,7 +149,7 @@ Not too much ?
 * Pullthrough & mirroring
 
 - Transparent proxy requests to third-party registry servers
-- Cache external blobs localy
+- Cache external blobs locally
 
 : This mechanism starts if the blob is not found locally.
 
@@ -175,7 +175,7 @@ TagService is just an interface to the database
 
 * Source code structure
 
-The division into modules is not over yet, but here is what it is now:
+The division into modules is not complete yet, but here is what it is now:
 
 .html snippets/sourcecode.html
 
@@ -188,7 +188,7 @@ The division into modules is not over yet, but here is what it is now:
 : [7] Provides functions for limiting incoming requests
 : [8] Provides functions to collect runtime statistics
 : [9] Provides functions for hard pruning
-: [10] Yes, this is s supermiddleware
+: [10] Yes, this is the supermiddleware
 : [11] Middleware generator
-: [12] Unsplited modules: auth, manifestService, tagService, pullthrough-related code, blobDescriptorService
+: [12] Unsplit modules: auth, manifestService, tagService, pullthrough-related code, blobDescriptorService
 
