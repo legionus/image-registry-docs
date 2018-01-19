@@ -43,6 +43,9 @@ Rule: A blob is any kind of content that is stored by a registry under a content
 - audit logs
 - prometheus metrics
 
+: In the server terminology, there is a repository and tags in it.
+: In our implementation, there is a namespace and the images in it.
+
 : But on the other hand, our features also bring problems:
 
 * Features disclaimer
@@ -58,9 +61,11 @@ Rule: A blob is any kind of content that is stored by a registry under a content
 
 * How to change the behavior of the docker/distribution
 
+: The docker/distribution uses middlewares to inject custom logic in the server's allowed locations.
+
 - Auth controller ‒ wraps every request
-- Registry middleware ‒ wraps reqistry interface in general  - what is the "registry interface"?
-- Repository middleware ‒ wraps the repository-related requests - what is the "repository"?
+- Registry middleware ‒ wraps reqistry interface in general
+- Repository middleware ‒ wraps the repository-related requests
 - Storage middleware ‒ wraps storage driver
 - BlobDescriptorService ‒ implements the verification of access rights to blobs
 
@@ -74,13 +79,23 @@ Not too much ?
 
 .image images/step1-docker-distribution.png
 
+: This is how the hierarchy of objects looks in general.
+: Everything starts with the creation of the docker application.
+: The application creates the handlers for client requests, auth controller, cache, registry itself and storage driver.
+: Each handler creates a new repository instance for each request.
+
 * The docker/distribution middlewares
 
 .image images/step2-docker-distribution-middleware.png _ 900
 
+: Here are the places where we can integrate into the logic of the server.
+
 * Supermiddleware
 
-- register as all the middlewares - what is a middleware?
+: Earlier, we registered a lot of middlewaries that could not communicate with each other.
+: To simplify the implementation, we decided to gather them all.
+
+- register as all the middlewares
 - connects middleware layers together
 - controls the middleware configuration
 
@@ -88,19 +103,30 @@ Not too much ?
 
 .image images/step3-registry-middleware.png _ 900
 
+: Blue color shows one object - supermiddleware
+: One middleware to bring them all and in the darkness bind them.
+
 * How we search for a blob (blobDescriptorService)
 
 - Search among the local links in the repository
-- Search globally among all blobs and try to find the blob in the database.
-- Search on remote servers if allowed - pullthrough? other cases where this is allowed?
+- Search globally among all blobs and try to find the blob in the database
+- Search on remote servers if allowed
+
+: The first case is the usual behavior of the upstream. The server creates special links in the repository, which means that the blob belongs to the repository.
+: The second case is the case where the image was not created by the registry server.
+: The last case is possible only when the pullthrough is enabled. We will focus on this later.
 
 * BlobDescriptorService implementation
 
 .code snippets/blobDescriptorService-Stat.go
 
+: Basically, this small fragment is the whole logic of the blobDescriptorService.
+
 * BlobDescriptorService.Stat call
 
 .html snippets/blobDescriptorService-Stat.html
+
+: This is a list of calls from the blobDescriptorService to the storage driver.
 
 * Push Image
 
@@ -112,7 +138,7 @@ Not too much ?
 - *PUT* `/v2/<REPO>/blobs/uploads/<UUID>`
 - *PUT* `/v2/<REPO>/manifests/<TAG>`
 
-: [1] API version check. This is used to determine if the server supports the v2 API. Now everyone can do it(meaning there's no auth check?).
+: [1] API version check. This is used to determine if the server supports the v2 API. Now every registry implementation should support this API.
 : [2] Second endpoint is used to get a session token.
 : [3] Check if there is a blob.
 : [4] Start uploading a new blob.
@@ -131,12 +157,14 @@ Not too much ?
 : Let's talk about a slightly simpler query: getting an image.
 : [1] API Version Check.
 : [2] Get session token.
-: [3] Get image manifest.(this will include the list of blobs that need to be retrieved)
-: [4] Get required blob(repeated for each layer in the manifest).
+: [3] Get image manifest (this will include the list of blobs that need to be retrieved).
+: [4] Get required blob (repeated for each layer in the manifest).
 
 * ManifestService
 
 .code snippets/manifestservice.go
+
+: We try to follow the principle, when one feature = one middleware (wrapper).
 
 * How the request for a manifest goes through the code
 
@@ -145,6 +173,8 @@ Not too much ?
 : Here is an incomplete stack of function calls to get the manifest.
 : Some developers find it difficult to understand the code since the entry point is in a completely different place.
 : Processing begins in the docker/distribution code and only sometimes processing is passed to our code.
+
+: At position 16, you can see the call to the blobDescriptorService. I do not show his list of calls because we discussed them earlier.
 
 * Pullthrough & mirroring
 
@@ -171,7 +201,11 @@ Not too much ?
 
 * Tag service
 
-TagService is just an interface to the database
+: We do not store tags on the filesystem, so all requests are converted to queries to the database.
+
+.code snippets/tagService-Get.go
+
+: Here is an example of how we get a tag.
 
 * Source code structure
 
